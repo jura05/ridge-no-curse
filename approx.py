@@ -1,6 +1,7 @@
 import random 
 import logging
 from math import erf, sqrt
+from time import time
 
 import numpy as np
 from numpy.polynomial import polynomial
@@ -30,8 +31,8 @@ def embed_polynomials_l2(p1, p2, l=1.0):
     S = q(l) - q(-l)
     S_coeff = [float(c) for c in reversed(sympy.Poly(S.expand()).all_coeffs())]  # sympy magic
     S_poly = polynomial.Polynomial(S_coeff)
-    min_value, min_x = minimize_polynomial(S_poly, -1, 1)  # TODO: может, другие значения нужны??
-    return 1 / min_x
+    min_value, min_mu = minimize_polynomial(S_poly, -1, 1)
+    return 1 / min_mu
 
 
 def minimize_polynomial(poly, a, b):
@@ -72,7 +73,7 @@ class RidgeSolver:
         self.phi = phi
 
     def get_random_unit_vector(self):
-        v = np.random.normal(0, 1, self.n)
+        v = np.array([random.gauss(0, 1) for _ in range(self.n)])
         return v / np.linalg.norm(v)
 
     def fit_polynomial(self, gamma):
@@ -80,6 +81,11 @@ class RidgeSolver:
         ts = np.linspace(-1, 1, 2 * self.N1 + 1)
         ys = [self.f_eps(t * gamma) for t in ts]
         return polynomial.Polynomial.fit(ts, ys, deg=self.M)
+
+    def check_fitting(self, gamma, poly):
+        v_gamma = np.dot(gamma, self.a)
+        ts = np.linspace(-self.l, self.l, 10)
+        return max(abs(poly(t) - self.phi(v_gamma * t)) for t in ts)
 
     def solve(self):
         typical_gamma = self.step_get_typical_gamma()
@@ -103,7 +109,7 @@ class RidgeSolver:
         all_poly = [self.fit_polynomial(gamma) for gamma in gammas]  # polynom coefficients for all gammas
 
         logging.warning('start embeddings ...')
-        insert_info = {i: {j: None for j in range(N2)} for i in range(N2)}  # if phi_i -> phi_j, insert[i][j] = corresponding lambda
+        embed_info = {i: {j: None for j in range(N2)} for i in range(N2)}  # if phi_i -> phi_j, insert[i][j] = corresponding lambda
         bound_minus = N2 * 0.4
         bound_plus = N2 *0.5
         v0 = -1
@@ -114,10 +120,10 @@ class RidgeSolver:
             for i in range(N2):
                 vall = embed_polynomials_l2(all_poly[i], all_poly[j], l=self.l)
                 if abs(vall) != 1:
-                    insert_info[i][j] = vall
-                if insert_info[i][j] is not None:
+                    embed_info[i][j] = vall
+                if embed_info[i][j] is not None:
                     am_good += 1
-            print('am_good',am_good)
+            print('am_good', am_good)
             if am_good < bound_plus and am_good >= bound_minus:
                 v0 = j
                 break
@@ -138,13 +144,13 @@ class RidgeSolver:
             for i in range(N2):
                 for j in range(N2):
                     if abs(real_v[j] / real_v[i]) > 1.01:
-                        quality1 += abs(real_v[j]/real_v[i] - insert_info[i][j])
-                        if abs(real_v[j]/real_v[i] - insert_info[i][j]) > max_quality1:
+                        quality1 += abs(real_v[j]/real_v[i] - embed_info[i][j])
+                        if abs(real_v[j]/real_v[i] - embed_info[i][j]) > max_quality1:
                             indmaxij = (i, j)
-                            max_quality1 = abs(real_v[j]/real_v[i] - insert_info[i][j])
+                            max_quality1 = abs(real_v[j]/real_v[i] - embed_info[i][j])
                         
             #print("Quality of lambdas: ", quality1, max_quality1, indmaxij)
-            #errs = [abs(real_v[j]/real_v[i] - insert_info[i][j]) for i in range(N2) for j in range(N2)]
+            #errs = [abs(real_v[j]/real_v[i] - embed_info[i][j]) for i in range(N2) for j in range(N2)]
             #errs = np.array(errs)
         return gammas[v0]
 
@@ -167,8 +173,10 @@ class RidgeSolver:
             lambda_i = embed_polynomials_l2(poly0, poly_ei, l=self.l)
             if abs(lambda_i) > max_lambda:
                 max_lambda = abs(lambda_i)
-                max_sign = 1 if lambda_i >= 0 else -1
                 max_idx = i
+
+        if self.a is not None:
+            self.sign = 1 if self.a[max_idx] >= 0 else -1
 
         for i in range(n):
             if i == max_idx:
@@ -183,7 +191,7 @@ class RidgeSolver:
 
         newa = w / np.linalg.norm(w)
         if self.a is not None:
-            a_compare = self.a if max_sign > 0 else -self.a  # because
+            a_compare = self.a * self.sign
             print("Approximation error of a, linf-norm:", max(abs(a_compare - newa)))
             print("Approximation error of a, l2-norm:", np.linalg.norm(a_compare - newa))
 
@@ -194,7 +202,7 @@ class RidgeSolver:
 
         values_phi = np.array([self.f_eps(t * newa) for t in ts])
         if self.phi is not None:
-            values_phi_real = np.array([self.phi(t) for t in ts])
+            values_phi_real = np.array([self.phi(t * self.sign) for t in ts])
 
         #plt.plot(ts, values_phi)
         #plt.plot(ts, values_phi_real - values_phi)
@@ -207,14 +215,14 @@ class RidgeSolver:
 
 def test_cosinus():
     n = 50
-    random.seed(78)
+    seed = int(time() % 10000)
+    print('seed:', seed)
+    random.seed(seed)
     eps = 0.0001
-    a = []
-    for i in range(n):
-        a.append(random.random())
-    a = np.array(a)
-    a = a.astype(np.float32)
-    a /= np.sqrt(sum(a*a))
+
+    a = np.array([random.gauss(0, 1) for _ in range(n)])
+    a = a / np.linalg.norm(a)
+     
     N1 = 200
     M = 3
     N2 = 25
