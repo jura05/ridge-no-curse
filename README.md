@@ -1,0 +1,1 @@
+# ridge-no-curse
