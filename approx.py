@@ -12,7 +12,7 @@ y = Symbol('y')
 
 random.seed(78)
 n = 50
-eps = 0#0.0001
+eps = 0.0001
 a = []
 for i in range(n):
     a.append(random.random())
@@ -25,6 +25,7 @@ N2 = 25
 N3 = 200
 gp = 2 ** random.random()
 gq = random.random() * 2 * np.pi
+l = 0.7
 
 def phi(x, p, q):
     return np.cos(p * x + q)#x**3 + 4*x + 1
@@ -68,6 +69,7 @@ def polynom_normed(coeff, x):
     return res
 
 def coef_poly_min(c1, c2):
+    global l
     c3 = []
     power = 1
     for i in range(len(c1)):
@@ -75,7 +77,7 @@ def coef_poly_min(c1, c2):
         power *= y
     c4 = np.polynomial.polynomial.polypow(c3, 2)
     c5 = np.polynomial.polynomial.polyint(c4)
-    integr = np.polynomial.polynomial.polyval(1, c5) - np.polynomial.polynomial.polyval(-1, c5)
+    integr = np.polynomial.polynomial.polyval(l, c5) - np.polynomial.polynomial.polyval(-l, c5)
     integr1 = integr.expand()
     coeff = Poly(integr1).all_coeffs()
     minn, indmin = minimum_polynom(coeff)
@@ -83,13 +85,14 @@ def coef_poly_min(c1, c2):
 
 
 def minimum_polynom(coef):#from high
+    global l
     diff_coef = np.polynomial.polynomial.polyder(coef[::-1])[::-1]
     poly = Poly.from_list(diff_coef, x)
     rroots = real_roots(poly)
     for i in range(len(rroots)):
         rroots[i] = float(rroots[i])
-    rroots.append(1)
-    rroots.append(-1)    
+    rroots.append(l)
+    rroots.append(-l)    
     values = np.polyval(coef, rroots)
     minn = min(values)
     isk_t = np.where(abs(values - minn) < 1e-8)[0][0]
@@ -122,18 +125,12 @@ def graph_first_step_works(ind):
     plt.show()
 #////////////////////////////////////////////////////////
 
-def quality1step(ind, step=0):
-    if step == 0:
-        tmax = min(1/real_abs_v[ind], 10)
-    else:
-        tmax = min(1/real_abs_v1[ind], 10)
+def quality1step(ind):
+    tmax = min(1/real_abs_v[ind], 10)
     p = tmax * np.arange(-20, 20)/20.
     y = np.zeros(40)
     yy = np.zeros(40)
-    if step==0:
-        v = gammas[ind] #np.ones(n)/np.sqrt(n)
-    else:
-        v = gammas1[ind]
+    v = gammas[ind] #np.ones(n)/np.sqrt(n)
     vgamma = sum(a * v) * np.sqrt(n)
     coeff = first_step(v)
     for i in range(40):
@@ -228,7 +225,7 @@ for i in range(n):
     if abs(cur) > max_lambd:
         max_lambd = abs(cur)
         index_abs_max = i
-amax = lambdasforai[index_abs_max]# * mF / sqrt(n)
+amax = lambdasforai[index_abs_max]
 sign = 1
 if amax < 0:
     sign = -1
