@@ -7,7 +7,6 @@ import numpy as np
 from numpy.polynomial import polynomial
 import matplotlib
 import matplotlib.pyplot as plt
-import scipy
 import sympy
 
 
@@ -51,7 +50,6 @@ def minimize_polynomial(poly, a, b):
 
 class RidgeSolver:
     """Recover a ridge function f(x)=phi(<a,x>) using f evaluations.
-
     Params:
         n       --  dimension of the problem
         f_eps   --  function with error
@@ -101,7 +99,6 @@ class RidgeSolver:
         gammas = [self.get_random_unit_vector() for _ in range(N2)]
 
         if self.a is not None:
-            # Theoretical considerations about v_i (unknown in the reality
             real_v = sqrt(self.n) * np.array([np.dot(self.a, gamma) for gamma in gammas])
             real_abs_v = np.abs(real_v)
 
@@ -109,7 +106,7 @@ class RidgeSolver:
         all_poly = [self.fit_polynomial(gamma) for gamma in gammas]  # polynom coefficients for all gammas
 
         logging.warning('start embeddings ...')
-        embed_info = {i: {j: None for j in range(N2)} for i in range(N2)}  # if phi_i -> phi_j, insert[i][j] = corresponding lambda
+        embed_info = {i: {j: None for j in range(N2)} for i in range(N2)}  # if phi_i -> phi_j, embed_info[i][j] = corresponding lambda
         bound_minus = N2 * 0.4
         bound_plus = N2 *0.5
         v0 = -1
@@ -213,7 +210,7 @@ class RidgeSolver:
 
 
 
-def test_cosinus():
+def test_trigonom():
     n = 50
     seed = int(time() % 10000)
     print('seed:', seed)
@@ -222,20 +219,26 @@ def test_cosinus():
 
     a = np.array([random.gauss(0, 1) for _ in range(n)])
     a = a / np.linalg.norm(a)
-     
+    
     N1 = 200
-    M = 3
+    M = 9
     N2 = 25
     N3 = 200
-    gp = 2 ** random.random()
-    gq = random.random() * 2 * np.pi
-    l = 0.7
+    #gp = 2 ** random.random()
+    #gq = random.random() * 2 * np.pi
+    K = 5
+    trigparams = np.array([random.gauss(0, 1) for _ in range(2*K + 1)])
+    trigparams /= np.linalg.norm(trigparams)
+    trigpcos = trigparams[np.arange(0, 2*K + 1, 2)]#a0/2, a1, a2, ... aK
+    trigpsin = trigparams[np.arange(1, 2*K + 1, 2)]#b1, b2, ... bK
+    l = 0.4
 
     def phi(x):
-        return np.cos(gp * x + gq)
+        return np.sum(trigpsin * np.sin(np.arange(1, K + 1) * np.pi * x)) + np.sum(trigpcos * np.cos(np.arange(0, K + 1) * np.pi * x))
+        #return  np.cos(gp * x + gq)
 
     def f(x):
-        return phi(np.dot(a, x)) + eps * (2 * random.random() - 1)
+        return phi(np.dot(a, x))
 
     def f_eps(x):
         return f(x) + eps * (2 * random.random() - 1)
@@ -260,7 +263,7 @@ def quality1step(ind):
     p = tmax * np.arange(-20, 20)/20.
     y = np.zeros(40)
     yy = np.zeros(40)
-    v = gammas[ind] #np.ones(n)/np.sqrt(n)
+    v = gammas[ind]
     vgamma = sum(a * v) * np.sqrt(n)
     coeff = fit_polynomial(v)
     for i in range(40):
@@ -283,4 +286,4 @@ def omega1():
 
 
 if __name__ == "__main__":
-    test_cosinus()
+    test_trigonom()
